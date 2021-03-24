@@ -5,21 +5,107 @@ output:
     keep_md: true
 ---
 
-
+----
 ## Loading and preprocessing the data
 
 
+Ok my people, first of all I am going to read the data.
 
-## What is mean total number of steps taken per day?
+```{r}
+activity <- read.csv("~/Github/RepData_PeerAssessment1/activity.csv")
+```
 
+
+
+Then, I am gonna do the histogram of total steps by day.
+
+```{r}
+activity$date <- as.factor(activity$date)
+stepsbyday <- aggregate(steps ~ date,activity, sum)
+hist(stepsbyday$steps, main= "Total Steps by Day", xlab= "Steps")
+```
+
+
+## What is mean and median total number of steps taken per day?
+
+Then, I am going to calculate the mean and median of steps by day.
+
+```{r}
+meansteps <- mean(stepsbyday$steps)
+mediansteps <- median(stepsbyday$steps)
+meansteps; mediansteps
+```
+Now. Let's calculate the average steps in each time frame.
+```{r, warning=FALSE, message=FALSE}
+library(dplyr)
+activity = as_tibble(activity)
+activity$interval <- as.factor(activity$interval)
+stepsbyint <- activity %>% group_by(interval) %>%  summarise(meansteps = mean(steps,na.rm = TRUE))
+```
 
 
 ## What is the average daily activity pattern?
+Now let's plot that thing.
+```{r}
+plot(meansteps ~interval, stepsbyint,  type= 'l', ylab = "Mean Steps", xlab = "Interval")
+```
 
+Looking like a peak around 800. Let's see which is the interval with the highest mean steps.
+```{r}
+stepsbyint[which.max(stepsbyint$meansteps),]
+```
+The peak is exactly at 835. Morning walkers.
 
+==============================
 
 ## Imputing missing values
 
+Ok, now let's count the number of missing data points
+```{r}
+table(is.na(activity$steps))
+```
+There are 2304. Let's fill the with something. I will use the mice package because it looks sophisticated. PLEASE BE PATIENT because it might take a couple of minutes.
+```{r, warning=FALSE, message=FALSE, results='hide'}
+library(mice)
+md.pattern(activity)
+imp <- mice(activity, maxit = 2)
+complete.activity <- complete(imp,1)
+```
+
+Recalculate mean and median, compare with old.
+```{r}
+complete.stepsbyday <- aggregate(steps ~ date, complete.activity, sum)
+complete.meansteps <- mean(complete.stepsbyday$steps)
+complete.mediansteps <- median(complete.stepsbyday$steps)
+meansteps; complete.meansteps; 
+mediansteps; complete.mediansteps
+```
+Well well. The mean and the median both come down considerably.
 
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+
+```{r warning=FALSE, message=FALSE, results='hide'}
+complete.activity$date<- as.Date(complete.activity$date)
+Sys.setlocale("LC_TIME", "C") #Small trick for getting weekdays in english not spanish
+complete.activity$weekday<- weekdays(complete.activity$date)
+complete.activity$wk <- "Weekday"
+complete.activity$wk[complete.activity$weekday== "Saturday"] <- "Weekend"
+complete.activity$wk[complete.activity$weekday== "Sunday"] <- "Weekend"
+complete.activity$wk <- as.factor(complete.activity$wk)
+
+```
+
+Alright, my people, now lets plot that thang.
+```{r, warning=FALSE, message=FALSE}
+stepsbyint.complete <- complete.activity %>% group_by(interval, wk) %>% 
+  summarise(meansteps = mean(steps))
+s <- as.data.frame(stepsbyint.complete)
+s$interval <- as.numeric(s$interval)
+
+library(ggplot2)
+
+ggplot(s, aes(x=interval, y=meansteps))+ geom_line(aes(col= wk))
+
+```
